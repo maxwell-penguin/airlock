@@ -305,6 +305,32 @@ def glob_targets_canary(pattern: str, base_rel: str, canary_paths: list[str]) ->
     return None
 
 
+def glob_through_links(pattern: str, path: str, cwd: str, canary_paths: list[str]) -> tuple[str, str] | None:
+    """A Glob whose directory part really expands (on disk, links followed) to a folder. Judged by where that folder REALLY is: a
+    pattern like `x/bank_*` with x -> notes is aimed at a canary though its words are not; a folder outside the project is not
+    ours to list. Returns ("canary" | "outside", reason) or None. The textual check in glob_targets_canary stays the first line.
+    ponytail: scans the disk (first 200 folders per pattern); a huge tree with `**/name/*` is slow, not unsafe."""
+    root, base = (_real(cwd, "/") if cwd else None), _real(path, cwd)
+    if not root or not base:
+        return None
+    for variant in expand_braces(pattern, limit=GLOB_BRACE_LIMIT):
+        comps = [x for x in variant.split("/") if x not in ("", ".")]
+        dirs = comps[:-1]
+        if not comps or not [d for d in dirs if d != "**"]:
+            continue
+        try:
+            for hit in itertools.islice(glob.iglob("/".join(dirs) + "/", root_dir=base, recursive=True, include_hidden=True), 200):
+                real = os.path.realpath(os.path.join(base, hit))
+                if real != root and not real.startswith(root.rstrip("/") + "/"):
+                    return "outside", "Glob pattern goes through a link that leaves the project directory"
+                why = glob_targets_canary(comps[-1], os.path.relpath(real, root), canary_paths)
+                if why:
+                    return "canary", why + " through a link"
+        except (OSError, ValueError):
+            return "outside", "Glob pattern could not be checked (fail closed)"
+    return None
+
+
 def _is_config(rel_or_abs: str) -> bool:
     parts = rel_or_abs.split("/")
     return ".claude" in parts or parts[-1] in CONFIG_NAMES
@@ -343,6 +369,11 @@ def classify_external(a: Action, canary_paths: list[str]) -> tuple[Risk, str, bo
                 why = glob_targets_canary(pat, rel, canary_paths)
                 if why:
                     return Risk.HARD_STOP, why, True
+                through = glob_through_links(pat, path, cwd, canary_paths)
+                if through and through[0] == "canary":
+                    return Risk.HARD_STOP, through[1], True
+                if through:
+                    return Risk.EXTERNAL, through[1], True
             if t == "Grep" and isinstance(pat, str) and any(fnmatch.fnmatch(c.casefold(), pat.casefold()) or fnmatch.fnmatch(os.path.basename(c).casefold(), pat.casefold())
                                                             for c in canary_paths):
                 return Risk.HARD_STOP, "Grep file filter selects a canary file", True
