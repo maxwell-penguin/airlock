@@ -31,7 +31,7 @@ Short ADR entries. Status: accepted, accepted (demo-grade), or open.
 - **Decision:** `dashboard_critical` defaults to "only when no key is attached".
 - **Why:** the dashboard is software on the host; critical actions (messages, payments, credentials, deletes) must need physical presence.
 - **Alternatives:** dashboard approves everything; separate dashboard login.
-- **Status:** accepted. Override: `AIRLOCK_DASHBOARD_CRITICAL`. Dashboard endpoints are unauthenticated by default. An optional Auth0 login gates approve, rewind, unfreeze, autonomy and tasks when configured ([AUTH0.md](AUTH0.md)); it is UNVERIFIED against a real tenant. An Origin/Host guard refuses cross-site and rebinding requests either way.
+- **Status:** accepted. Override: `AIRLOCK_DASHBOARD_CRITICAL`. Dashboard endpoints are unauthenticated by default. An optional Auth0 login gates approve, rewind, unfreeze, autonomy and tasks when configured ([AUTH0.md](AUTH0.md)); it is verified against a real tenant in mock mode with no key attached (2026-11-22; logout, refresh, reload and login with the key attached not tested). An Origin/Host guard refuses cross-site and rebinding requests either way.
 
 ## 6. Canaries
 - **Decision:** plant fake secrets (`.env`, `passwords.txt`, `notes/bank_login.txt`) with random values; a read or a leak is a hard stop.
