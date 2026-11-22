@@ -436,8 +436,15 @@ def test_the_abort_socket_sets_the_flag_and_a_new_call_starts_clean(tmp_path, ab
     while not os.path.exists(sock) and time.time() < deadline:
         time.sleep(0.02)
     import socket as _s
-    c = _s.socket(_s.AF_UNIX, _s.SOCK_STREAM)
-    c.connect(sock)
+    while True:  # the socket file appears just before listen(): retry a refused connect instead of flaking
+        c = _s.socket(_s.AF_UNIX, _s.SOCK_STREAM)
+        try:
+            c.connect(sock)
+            break
+        except ConnectionRefusedError:
+            c.close()
+            assert time.time() < deadline + 3
+            time.sleep(0.02)
     assert c.recv(8) == b"ok\n"
     c.close()
     assert runner.ABORT.is_set()
