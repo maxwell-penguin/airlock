@@ -25,7 +25,7 @@ Deadline: **Devpost, Sun Nov 22, 9:00am Toronto** (6:00am PST). The timeline bel
 
 ## Stretch goals, in order
 
-1. **Auth0 login on the dashboard**, with a token-checked approve endpoint. **Built, optional, off by default** ([AUTH0.md](AUTH0.md)); UNVERIFIED against a real tenant. Without it the endpoints are unauthenticated on localhost (with an Origin/Host guard against web pages).
+1. **Auth0 login on the dashboard**, with a token-checked approve endpoint. **Built, optional, off by default** ([AUTH0.md](AUTH0.md)); verified against a real tenant in mock mode with no key attached (2026-11-22; logout, refresh, reload and login with the key attached not tested). Without it the endpoints are unauthenticated on localhost (with an Origin/Host guard against web pages).
 2. **GoDaddy domain** for the project. **Not done.**
 3. **TinyFish `web_task`** tool (hosted browser, run host-side). **Built, off by default** (77 mock tests; one live read-only run passed, reported by the team). UNTESTED: the live cancel call and a real model driving it. Whether to enter the TinyFish prize track is in [HACKATHON.md](HACKATHON.md).
 4. **Phone approvals** via the dashboard on a phone. **Not built.** Constraints: the gateway binds `127.0.0.1` and CORS allows only localhost:5173, and the dashboard cannot approve critical actions while a key is attached, so a phone could approve non-critical actions only.

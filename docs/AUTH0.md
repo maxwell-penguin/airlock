@@ -1,6 +1,6 @@
 # Optional Auth0 login
 
-**Status: UNVERIFIED against a real Auth0 tenant.** It is **off by default**. With no variables set, the dashboard and gateway behave exactly as they did before. Mark this VERIFIED only after you have run it with real tenant values and seen a login, an approve and a rewind go through.
+**Status: VERIFIED against a real Auth0 tenant, in mock mode with no key attached (2026-11-22).** Not verified: logout, token refresh, page-reload behavior, and the login with the physical key attached. It is **off by default**. With no variables set, the dashboard and gateway behave exactly as they did before.
 
 ## What it does (and does not)
 
@@ -81,13 +81,23 @@ Unset all five variables (and delete `dashboard/.env.local` if you used it), the
 | Gateway exits at start with "must both be set, or neither" | only one of `AUTH0_DOMAIN` / `AUTH0_AUDIENCE` is set |
 | Login works, but approve and rewind give "login required or session expired" (401) | `VITE_AUTH0_AUDIENCE` missing or different from `AUTH0_AUDIENCE`; API not set to RS256; the gateway cannot reach `https://<domain>/.well-known/jwks.json` |
 | Auth0 error "callback URL mismatch" | Step 2 URLs do not match the address in the browser (use `localhost`, not `127.0.0.1`, or add both) |
+| Auth0 error "Callback URL mismatch" on the real tenant | the three URI fields (Allowed Callback URLs, Allowed Logout URLs, Allowed Web Origins) are not set on the SPA, or you are using the wrong app: it must be the Single Page Application, not the machine-to-machine test app |
+| Auth0 error "Client is not authorized to access resource server" | set the API's User-delegated Access to allow, or authorize the app in the API's Application Access tab |
 | Reloading the page asks you to sign in again | by design: the dashboard keeps the session in memory only (`cacheLocation="memory"`), nothing in browser storage |
 
 ## What was actually run
 
-All with **no real tenant**; nothing here proves it works against Auth0:
+**Against a real tenant, 2026-11-22** (`<your-tenant>.us.auth0.com`, a SPA plus a custom API with RS256; mock mode, no key attached; run by hand):
+
+- Sign in worked.
+- Resume agent, change autonomy and start task worked behind the login.
+- Approve and Deny both worked on a `write_file` approval.
+- Rewind restored snapshot `s0001`.
+- `make auth0-check` passed 7/7: the real JWKS with 2 RS256 keys, `auth_required` true, and 401 with no token and with a garbage token.
+
+**Without a real tenant** (run earlier, still stand):
 
 - `gateway/tests/test_auth0.py` (15 tests, part of `make test`, no network): a locally generated RSA key stands in for the tenant. Disabled by default needs no token; enabled rejects a missing token, empty value, garbage, wrong key, wrong audience, wrong issuer, expired, no `exp`, HS256 and `alg: none` on both approve and rewind (and leaves the approval pending); a valid token works; an unreachable key set fails closed; a valid token still gets 409 on a critical action with a key attached; a half-configured gateway refuses to start.
 - Dashboard: `npm run build` passes. With fake values (`VITE_AUTH0_DOMAIN=tenant.example.auth0.com`, a made-up client id) the dev server showed the "Sign in" screen and hid the app; with no values it showed the app exactly as before (checked once, in Google Chrome driven by Playwright).
 
-**Not run (UNVERIFIED):** an actual login, a real access token, the tenant's real key set (`PyJWKClient` against live `jwks.json`), token refresh, logout, the callback and logout URL settings, and the troubleshooting rows above (they follow from the code, not from reproduction).
+**Not run:** logout, token refresh, page-reload behavior, and the login with the physical key attached.
