@@ -1,0 +1,78 @@
+# Verified end to end on Docker 29 / Compose v5 (arm64); see docs/SPIKE.md for what was and was not run.
+#
+# Network design: the sandbox sits on an *internal* network with no route to the internet.
+# Its only way out is the proxy (allowlist + canary scan). noVNC reaches your browser through
+# the tiny `viewer` relay, because published ports do not work from internal-only networks.
+# The gateway talks to the sandbox with `docker exec`, so no inbound ports are needed.
+#
+#   docker compose -f sandbox/docker-compose.yml up -d --build
+#   open http://localhost:6080/vnc.html     (live view)
+
+services:
+  sandbox:
+    build: .
+    image: airlock/sandbox:dev
+    container_name: airlock-sandbox
+    init: true                           # PID 1 that forwards SIGTERM: stops in ~1s instead of waiting out the 10s kill timeout
+    environment:
+      HTTP_PROXY: http://proxy:8080
+      HTTPS_PROXY: http://proxy:8080
+      NO_PROXY: localhost,127.0.0.1
+      # Non-browser clients verify HTTPS against the system bundle, which the entrypoint extends with the proxy's public CA.
+      SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+      REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
+      CURL_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
+      GIT_SSL_CAINFO: /etc/ssl/certs/ca-certificates.crt
+      PIP_CERT: /etc/ssl/certs/ca-certificates.crt
+      NODE_EXTRA_CA_CERTS: /airlock-ca/airlock-proxy-ca.crt
+    volumes:
+      - ../state/workspace:/workspace   # agent's files; host-side snapshots and rewind work on this
+      - ../state/shots:/shots           # screenshots for the timeline
+      - ../state/mitm-ca/public:/airlock-ca:ro   # the proxy CA CERTIFICATE only. The private key is in ../state/mitm-ca/private, mounted into the proxy alone
+    networks: [airlock_internal]
+    shm_size: "1gb"                      # Chromium crashes with the default 64 MB
+
+  proxy:
+    image: mitmproxy/mitmproxy:12.3.1@sha256:2711066c855659b5af8b1dbb84494ed3eff69b42ece439c60b4fe09a2db829d4
+    container_name: airlock-proxy
+    # rawtcp=false: bytes that are neither HTTP nor TLS-wrapped HTTP are refused, not relayed unscanned (default is true).
+    command: mitmdump -s /addon/airlock_addon.py --listen-port 8080 --set rawtcp=false
+    environment:
+      AIRLOCK_ALLOWLIST: ${AIRLOCK_ALLOWLIST:-demo.local,example.com,localhost}
+      AIRLOCK_CANARY_FILE: /state/canaries.json
+      AIRLOCK_GATEWAY_URL: http://host.docker.internal:8000
+      AIRLOCK_EXTERNAL_TOKEN: ${AIRLOCK_EXTERNAL_TOKEN:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ../proxy:/addon:ro
+      - ../state:/state:ro
+      - ../state/mitm-ca/private:/home/mitmproxy/.mitmproxy   # the CA key + cert mitmproxy signs with (never mounted into the sandbox)
+    networks: [airlock_internal, airlock_egress]
+
+  # Serves demo/pages as http://demo.local/<name>. It is on the egress network ONLY, so the sandbox
+  # cannot reach it directly; the sandbox's browser gets there through the proxy allowlist.
+  demo:
+    image: airlock/sandbox:dev
+    container_name: airlock-demo
+    init: true
+    entrypoint: ["python3", "-m", "http.server", "80", "--directory", "/pages"]
+    volumes:
+      - ../demo/pages:/pages:ro
+    depends_on: [sandbox]
+    networks:
+      airlock_egress:
+        aliases: [demo.local]
+
+  viewer:
+    image: alpine/socat@sha256:5aa280c6fc5bee94dbd2bbdf2a58d30f50396eaa110be84b03636945b157ae68
+    container_name: airlock-viewer
+    command: tcp-listen:6080,fork,reuseaddr tcp:sandbox:6080
+    ports:
+      - "127.0.0.1:6080:6080"            # localhost only: the VNC has no password
+    networks: [airlock_internal, airlock_egress]
+
+networks:
+  airlock_internal:
+    internal: true
+  airlock_egress: {}

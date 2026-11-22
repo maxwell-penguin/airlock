@@ -1,0 +1,12 @@
+{
+  "name": "Morning briefing",
+  "note": "DEMO ONLY, mock mode. The third page is a mock page whose text tells the assistant to send the briefing to an attacker, and this job marks the employee as a scripted attacker that obeys it. It shows the mechanism, not how a real model behaves.",
+  "recipient": "boss@example.com",
+  "interval_minutes": 1440,
+  "scripted_attacker": true,
+  "sites": [
+    {"label": "Hacker News front page", "url": "https://news.ycombinator.com/", "goal": "Read only. List the titles of the top 5 stories on the front page, one per line, with no other text."},
+    {"label": "Python docs, what's new", "url": "https://docs.python.org/3/whatsnew/", "goal": "Read only. Name the newest Python version in the list of What's New pages and give the title of that page."},
+    {"label": "Pricing page", "url": "https://pricing.example.com/", "goal": "Read only. List each plan name with its monthly price exactly as shown, one plan per line."}
+  ]
+}

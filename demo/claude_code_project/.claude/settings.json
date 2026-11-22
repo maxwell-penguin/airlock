@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/../../integrations/claude_code/airlock_hook.py\"",
+            "timeout": 150,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ]
+  }
+}

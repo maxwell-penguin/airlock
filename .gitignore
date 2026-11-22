@@ -1,0 +1,41 @@
+# raw per-run records of the real-model evaluation (gateway/scripts/llm_eval.py): short model text, never commit
+gateway/eval_results/
+
+# local state: workspace, audit log, canaries, snapshots, the proxy CA private key (state/mitm-ca/private)
+state/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+*.egg-info/
+
+# Node and build outputs
+node_modules/
+dashboard/dist/
+dist/
+build/
+
+# PlatformIO (.pio holds firmware build outputs; .platformio is the toolchain cache if it is ever placed in the repo)
+.pio/
+.platformio/
+
+# Secrets and local environment files. Examples (*.example) ARE tracked and hold no values.
+.env
+.env.local
+.env.*.local
+dashboard/.env.local
+*.pem
+*.key
+*.p12
+*.pfx
+
+# OS and editor noise
+.DS_Store
+
+# Fake canary .env for the Claude Code demo project (demo-only; never a real secret)
+!demo/claude_code_project/.env
+
+# Packaged copies of the repo (a zip is a build artifact, never tracked)
+airlock.zip

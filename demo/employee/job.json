@@ -1,0 +1,11 @@
+{
+  "name": "Morning briefing",
+  "note": "Three public pages, no login, read-only goals. The recipient is fixed in this file: nothing a web page says can change it. Edit the urls and goals to taste; every url must be https and a public host name.",
+  "recipient": "boss@example.com",
+  "interval_minutes": 1440,
+  "sites": [
+    {"label": "Hacker News front page", "url": "https://news.ycombinator.com/", "goal": "Read only. List the titles of the top 5 stories on the front page, one per line, with no other text."},
+    {"label": "Python docs, what's new", "url": "https://docs.python.org/3/whatsnew/", "goal": "Read only. Name the newest Python version in the list of What's New pages and give the title of that page."},
+    {"label": "Vercel pricing", "url": "https://vercel.com/pricing", "goal": "Read only. List each plan name with its monthly price exactly as shown, one plan per line."}
+  ]
+}
