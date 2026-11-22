@@ -22,6 +22,7 @@ import asyncio
 import json
 import os
 import re
+import time
 from dataclasses import dataclass
 from typing import Protocol
 from urllib.parse import urlsplit
@@ -205,11 +206,17 @@ class MockTinyFish:
 class WebTasks:
     """Runs web tasks with the cost controls: one at a time, a cap per session (this gateway process), a hard timeout."""
 
-    def __init__(self, client: TinyFishClient, max_runs: int = 5, timeout: float = 90.0, simulated: bool = False):
+    def __init__(self, client: TinyFishClient, max_runs: int = 5, timeout: float = 90.0, simulated: bool = False,
+                 window_seconds: float | None = None, clock=time.monotonic):
         # a limit that is not a sane number (inf, nan, zero, negative, huge) falls back to the default instead of switching the limit off
         self.max_runs = max_runs if isinstance(max_runs, int) and 1 <= max_runs <= 50 else 5
         self.timeout = float(timeout) if isinstance(timeout, (int, float)) and 0 < timeout <= 600 else 90.0
         self.client, self.simulated = client, simulated
+        # Optional rolling window (AIRLOCK_TINYFISH_WINDOW_SECONDS). None = off = the per-process cap, unchanged. A value that is not a sane
+        # number means off too (never "unlimited").
+        ok = isinstance(window_seconds, (int, float)) and not isinstance(window_seconds, bool) and 1 <= window_seconds <= 604800
+        self.window_seconds = float(window_seconds) if ok else None
+        self._clock, self._starts = clock, []
         self.runs = 0
         self._busy = False
 
@@ -217,7 +224,12 @@ class WebTasks:
         """Why a run would be refused right now (asked before a person is bothered, and again at the moment of running)."""
         if self._busy:
             return "another web task is still running (one at a time)"
-        if self.runs >= self.max_runs:
+        if self.window_seconds is not None:
+            cutoff = self._clock() - self.window_seconds
+            self._starts = [t for t in self._starts if t > cutoff]
+            if len(self._starts) >= self.max_runs:
+                return f"the web task limit is reached ({self.max_runs} runs per {self.window_seconds:g} seconds)"
+        elif self.runs >= self.max_runs:
             return f"the web task limit for this session is reached ({self.max_runs} runs)"
         return None
 
@@ -226,6 +238,7 @@ class WebTasks:
         if why:
             return ToolResult(ok=False, output=f"web task refused: {why}")
         self._busy = True
+        self._starts.append(self._clock())
         self.runs += 1  # counted when it starts: a started run spends credits whatever happens next
         try:
             res = await asyncio.wait_for(self.client.run(url, goal), self.timeout)
@@ -249,7 +262,8 @@ def build_web_tasks(settings) -> WebTasks | None:
     """None = web_task is off (the default). AIRLOCK_TINYFISH=1 with TINYFISH_API_KEY set = the real service.
     AIRLOCK_TINYFISH=mock = canned results, only in mock mode, no key (the demo and the tests)."""
     switch = (getattr(settings, "tinyfish", "") or "").strip().lower()
-    caps = {"max_runs": settings.tinyfish_max_runs, "timeout": settings.tinyfish_timeout}
+    caps = {"max_runs": settings.tinyfish_max_runs, "timeout": settings.tinyfish_timeout,
+            "window_seconds": settings.tinyfish_window_seconds}
     if switch == "mock" and settings.mode == "mock":
         return WebTasks(MockTinyFish(), simulated=True, **caps)
     if switch in ("1", "true", "yes", "on"):

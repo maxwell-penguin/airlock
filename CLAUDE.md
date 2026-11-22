@@ -11,7 +11,7 @@ Airlock is a safe room for AI agents. The agent works in a walled-off sandbox, a
 - Approval timeout means deny. So does no eligible channel, a forged reply, or anything other than `approve`.
 - The dashboard cannot approve critical actions when a key is attached.
 - Any change to `gateway/airlock/keyproto.py` must be matched in `firmware/` and `docs/CONTRACTS.md`, and the test vectors must keep passing.
-- Mock mode must keep working, and `make test` must pass before every merge (1073 passed, 54 skipped as of the last full run: 44 Docker tests without the stack and 10 live WebSocket tests without `mitmdump`; the count grows, the rule is: no failures).
+- Mock mode must keep working, and `make test` must pass before every merge (1244 passed, 54 skipped as of the last full run: 44 Docker tests without the stack and 10 live WebSocket tests without `mitmdump`; the count grows, the rule is: no failures).
 - Never label something tested unless it was run. Keep UNTESTED until you have run it.
 - Never commit real secrets. The canaries and `dev-secret-change-me` are fake and demo-only.
 
@@ -24,7 +24,7 @@ Airlock is a safe room for AI agents. The agent works in a walled-off sandbox, a
 - [docs/HARDWARE.md](docs/HARDWARE.md): the approval key, wiring, bring-up
 - [firmware/README.md](firmware/README.md): set up, flash and connect the key (Arduino Uno)
 - [docs/CONTRACTS.md](docs/CONTRACTS.md): interfaces between the pieces; change only after telling everyone
-- Also: `docs/HACKATHON.md`, `docs/ONBOARDING.md`, `docs/ROLES.md` (older table; PLAN.md is current), `docs/THREAT_MODEL.md`, `docs/DEMO.md`, `docs/SPIKE.md`, `docs/CLAUDE_CODE.md`, `docs/AUTH0.md`, `docs/DESIGN.md` (dashboard design kit), `docs/EVAL.md` (LLM evaluation), `docs/DESIGN.md` (dashboard design kit; live at `?kit`)
+- Also: `docs/HACKATHON.md`, `docs/ONBOARDING.md`, `docs/ROLES.md` (older table; PLAN.md is current), `docs/THREAT_MODEL.md`, `docs/DEMO.md`, `docs/SPIKE.md`, `docs/CLAUDE_CODE.md`, `docs/AUTH0.md`, `docs/DESIGN.md` (dashboard design kit), `docs/EVAL.md` (LLM evaluation), `docs/INVARIANTS.md` (each invariant and its tests), `docs/JUDGES.md` (verify in 5 minutes), `docs/DESIGN.md` (dashboard design kit; live at `?kit`)
 
 ## Repo map
 
@@ -45,7 +45,7 @@ No Docker and no API key needed:
 
 ```
 make setup
-make test         # 1073 passed, 54 skipped (44 docker tests, 10 live websocket tests that need mitmdump)
+make test         # 1244 passed, 54 skipped (44 docker tests, 10 live websocket tests that need mitmdump)
 make server       # gateway on :8000
 make dashboard    # UI on :5173
 make scoreboard   # unprotected vs protected attack runs

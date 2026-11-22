@@ -186,3 +186,29 @@ def test_an_ordinary_close_reason_reports_nothing(addon):
     addon.a.websocket_end(f2)
     addon.flush()
     assert addon.sent == []
+
+
+# --- the known gap, pinned (ping and pong payloads) --------------------------------------------------------------------------
+# What is scanned: every text and binary WebSocket message in both directions (websocket_message) and the close-frame reason after the
+# fact (websocket_end). What is NOT: ping and pong payloads (up to 125 bytes each). mitmproxy 12.3.1 had no hook for them when this was
+# checked live (docs/THREAT_MODEL.md row 66); it was not re-checked offline. These tests do not prove the gap, they pin OUR side of it so a
+# change is noticed: if someone adds a ping hook, or the addon starts to read frames some other way, these fail and the docs must follow.
+
+def test_the_addon_hooks_only_messages_and_the_end_of_a_websocket(addon):
+    hooks = {n for n in dir(addon.a) if n.startswith(("websocket_", "ping", "pong", "on_ping", "on_pong"))}
+    assert hooks == {"websocket_message", "websocket_end"}
+
+
+def test_a_canary_offered_as_a_ping_payload_is_not_seen_by_any_hook_today(addon):
+    f = addon.flow()
+    f.websocket.ping_payload, f.websocket.pong_payload = V.encode(), V.encode()    # not a real mitmproxy field: nothing hands us these bytes
+    addon.a.websocket_message(f)      # no message: nothing to scan
+    addon.a.websocket_end(f)
+    addon.flush()
+    assert addon.sent == [] and addon.killed == []
+
+
+def test_the_threat_model_states_the_ping_pong_limit():
+    from pathlib import Path
+    text = (Path(__file__).resolve().parents[2] / "docs" / "THREAT_MODEL.md").read_text()
+    assert "ping/pong payloads cannot be scanned" in text and "125 bytes" in text

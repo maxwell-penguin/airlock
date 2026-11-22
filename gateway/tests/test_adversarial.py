@@ -301,8 +301,14 @@ def test_the_abort_socket_understands_resume(tmp_path):
         time.sleep(0.02)
 
     def send(word):
-        c = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        c.connect(sock)
+        for _ in range(150):  # the socket file appears just before listen(): retry a refused connect
+            c = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            try:
+                c.connect(sock)
+                break
+            except ConnectionRefusedError:
+                c.close()
+                time.sleep(0.02)
         c.sendall(word)
         r = c.recv(8)
         c.close()

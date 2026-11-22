@@ -57,6 +57,7 @@ class Settings:
     tinyfish: str = ""                     # web_task switch: "" (off, the default) | "1" (real TinyFish, needs TINYFISH_API_KEY) | "mock" (canned, mock mode only)
     tinyfish_max_runs: int = 5             # web tasks per gateway session
     tinyfish_timeout: float = 90.0         # hard limit for one web task, seconds
+    tinyfish_window_seconds: float | None = None   # None (the default) = the cap above is per process; a number = at most max_runs per rolling window
     auth0_domain: str | None = None        # both set = dashboard approve/rewind need an Auth0 token; neither = off
     auth0_audience: str | None = None
 
@@ -122,6 +123,7 @@ def load_settings() -> Settings:
     s.standing_run_timeout = _bounded(os.getenv("AIRLOCK_STANDING_RUN_TIMEOUT"), float, 1.0, 3600.0, s.standing_run_timeout)
     s.tinyfish = (os.getenv("AIRLOCK_TINYFISH") or "").strip().lower()  # the API key itself is read from TINYFISH_API_KEY at start-up, never kept in Settings
     s.tinyfish_max_runs = _bounded(os.getenv("AIRLOCK_TINYFISH_MAX_RUNS"), int, 1, 50, s.tinyfish_max_runs)   # a bad value keeps the default:
+    s.tinyfish_window_seconds = _bounded(os.getenv("AIRLOCK_TINYFISH_WINDOW_SECONDS") or "0", float, 1.0, 604800.0, None)  # a bad value = off (the old cap)
     s.tinyfish_timeout = _bounded(os.getenv("AIRLOCK_TINYFISH_TIMEOUT"), float, 0.001, 600.0, s.tinyfish_timeout)  # it never switches a limit off
     domain = (os.getenv("AUTH0_DOMAIN") or "").strip().removeprefix("https://").strip("/")
     s.auth0_domain = domain or None

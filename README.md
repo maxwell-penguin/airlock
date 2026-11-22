@@ -4,6 +4,8 @@
 
 - [CLAUDE.md](CLAUDE.md) — what this is, invariants, commands, rules
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — the authoritative guide
+- [docs/JUDGES.md](docs/JUDGES.md) — verify this in 5 minutes, no hardware and no Docker
+- [docs/INVARIANTS.md](docs/INVARIANTS.md) — every invariant and the tests that enforce it
 - [docs/HACKATHON.md](docs/HACKATHON.md) — event, prizes, judging, submission
 - [docs/ONBOARDING.md](docs/ONBOARDING.md) — prompt for your own Claude, and the first hour
 
@@ -40,7 +42,7 @@ Details: [docs/HARDWARE.md](docs/HARDWARE.md). Setup: [firmware/README.md](firmw
 ## Quickstart (no Docker, no API key)
 ```
 make setup
-make test          # 1073 passed, 54 skipped (44 Docker tests; 10 live websocket tests that need mitmdump)
+make test          # 1244 passed, 54 skipped (44 Docker tests; 10 live websocket tests that need mitmdump)
 make scoreboard    # unprotected vs protected attack runs
 make server        # gateway on :8000
 make dashboard     # UI on :5173
@@ -71,10 +73,11 @@ Optional Auth0 login for the dashboard: off by default, see [docs/AUTH0.md](docs
 ## Status
 | Part | State |
 |---|---|
-| gateway, policy, snapshots, audit, approvals, key protocol, server, Auth0 gate | tested (pytest: 1073 passed, 54 skipped: 44 Docker tests without the stack and 10 live WebSocket tests without `mitmdump`) |
+| gateway, policy, snapshots, audit, approvals, key protocol, server, Auth0 gate | tested (pytest: 1244 passed, 54 skipped: 44 Docker tests without the stack and 10 live WebSocket tests without `mitmdump`) |
 | scripted agent, scoreboard | works in mock mode (7/7 attacks contained, 7/7 got through unprotected). Run against the live docker stack via `make demo-run`: the exfiltration pages 05 (stops at the approval, denied) and 06 (canary inside, frozen before any prompt), plus 01. It shows the mechanism, not real-model behavior |
 | Claude Code integration (hook + `POST /external/submit`) | tested (154 tests: `test_external.py` 125, `test_claude_code_hook.py` 29) and run with **real `claude -p` sessions** against a live gateway: clean request authorized, a user-requested `.env` read denied and frozen, gateway-down denied, and Bash calls from an injected-README session reached the approval and were denied. **In that run the model flagged the injection and did not follow it**, so the injection-to-tripwire path was not seen with a real agent. A gate, not the sandbox: Claude Code runs tools directly, no snapshot or rewind. Physical key, long waits, hook timeout, parallel calls: not run. See docs/CLAUDE_CODE.md |
 | `send_message` (critical tool) | **simulated, not sent anywhere.** Approval writes a host-side outbox, shown in the dashboard; denial, timeout and bad input write nothing. Tested (35 tests in test_outbox, 4 more against Docker) and run in `make demo-run` in mock and docker mode, with no key and with a **simulated** key. Never run with the physical key. The key's 84-character display shows only the start of a long body; the dashboard shows more |
+| overnight hardening (mock mode only; docs/THREAT_MODEL.md rows 75 to 80) | **tried, 6 bugs fixed with tests, not proven secure.** The employee, a Glob through a directory symlink (a real hole, closed), a deeply nested action that crashed `submit()` (found by a seeded fuzz), a half-copied snapshot that rewind could pick, a crashing backend, messy simulated TinyFish output, approval races. About 170 new tests. **UNTESTED:** real TinyFish output, Docker, the physical key, and mitmproxy's lack of a ping/pong hook was not re-checked (documented limit) |
 | red team (docs/THREAT_MODEL.md) | **tried and partly fixed, not proven secure.** A second review of the freeze-cancel, WebSocket scan, Glob/LS, `web_task` and eval code found 11 more bugs, all fixed with tests (90 tests in `test_adversarial.py`, rows 56 to 66). First pass: 246 attack tests against the gateway (canary evasion, summary tampering, approval races and key-protocol abuse, tier downgrades, cross-site and rebinding requests, rewind traversal). 134 real failures in the first full run (plus the rewind-traversal cases, seen earlier; e.g. cross-site POST `/unfreeze`; rewind to `/etc` or `/` copied host files into the workspace; encoded canaries slipped through; summaries were unsanitized), all fixed and re-run; known gaps (shell obfuscation, split-with-letters, local processes, the key's 84-character screen, WebSocket ping/pong payloads, and the untested Docker abort path) are listed. Not tested: the physical key, amd64/Linux, real models attacking |
 | demo tooling (`make preflight`, `demo`, `demo-run`, `demo-reset`, `demo-stop`) | run in mock and docker mode. `make demo-run`: 27/27 checks, 3 runs in a row in each mode, no flakiness seen in those runs (mock about 0.3 s, docker about 3.5 s per run). `demo-reset` 0.05 s; `demo-stop` left no processes, containers or ports. Docker-unreachable and busy-port failures fail loudly with a fix line. Not run: with a real key, a human-timed rehearsal, the network actually off |
 | Auth0 login (optional, off by default) | **VERIFIED against a real tenant in mock mode, no key attached (2026-11-22);** not tested: logout, token refresh, page reload, login with the physical key attached. 15 tests with a locally generated key (bad tokens rejected on approve and rewind, fail closed, critical-with-key still refused); dashboard login screen appears with fake tenant values. See docs/AUTH0.md |
