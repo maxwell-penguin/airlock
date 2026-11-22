@@ -64,11 +64,19 @@ def _text(value, what: str, limit: int) -> str:
     return clean
 
 
+def _no_duplicates(pairs):
+    """A repeated key would silently let the last one win (a second "recipient" redirecting the briefing): refuse it."""
+    keys = [k for k, _ in pairs]
+    if len(keys) != len(set(keys)):
+        raise ValueError("duplicate key")
+    return dict(pairs)
+
+
 def load_job(path) -> Job:
     """Read and validate a job file. Each url and goal goes through the same checks web_task applies (https, a public host name, no
     redirect target inside the url, a goal of at most 500 plain characters), and the recipient through the message rules."""
     try:
-        data = json.loads(Path(path).read_text())
+        data = json.loads(Path(path).read_text(), object_pairs_hook=_no_duplicates)
     except (OSError, ValueError) as exc:
         raise EmployeeError(f"cannot read the job file: {type(exc).__name__}") from None
     if not isinstance(data, dict):
@@ -123,6 +131,18 @@ def _clean(output: str) -> str:
     return text if len(text) <= SITE_TEXT_MAX else text[:SITE_TEXT_MAX].rstrip() + " ..."
 
 
+def _why(res) -> str:
+    """Why a source is missing, in the gateway's own words. A failed run's error text comes from the remote side, so it is never passed on."""
+    if res.status != "executed":
+        return " ".join((res.reason or res.status).split())[:100]  # denied, refused, rejected: written by the gateway
+    out = res.output or ""
+    if out.startswith("web task timed out"):
+        return "timed out"
+    if out.startswith("web task refused"):
+        return " ".join(out.split())[:100]
+    return "the page could not be read"
+
+
 def _slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "briefing"
 
@@ -143,10 +163,13 @@ class EmployeeAgent(Agent):
             res = await gateway.submit(Action(type="web_task", details={"url": site.url, "goal": site.goal}))
             if res.status in STOP_STATUSES:
                 return  # frozen, blocked by the tripwire or cancelled: the employee stops
-            if res.status == "executed" and res.ok:
-                got.append((site, _clean(res.output), ""))
+            text = _clean(res.output) if res.status == "executed" and res.ok else None
+            if text is not None and not text:
+                got.append((site, None, "the page returned nothing"))
+            elif text is not None:
+                got.append((site, text, ""))
             else:  # denied (no answer counts), refused by a cap, off, or the page could not be read
-                got.append((site, None, " ".join((res.reason or res.output or res.status).split())[:100]))
+                got.append((site, None, _why(res)))
         have = [(s, t) for s, t, _ in got if t is not None]
         if not have:
             return  # nothing to brief about: nothing is written and nothing is sent
@@ -168,15 +191,19 @@ class EmployeeAgent(Agent):
                     recipient = m.group(1)
                     break
         await gateway.submit(Action(type="send_message", details={
-            "to": recipient, "subject": f"{job.name}, {day}"[:80], "body": self._body(job, day, have, len(got), path)}))
+            "to": recipient, "subject": f"{job.name}, {day}"[:80], "body": self._body(job, day, got, path)}))
 
     @staticmethod
-    def _body(job: Job, day: str, have: list[tuple[Site, str]], total: int, path: str) -> str:
-        head, foot = _header(job, day, len(have), total), f"Saved in the workspace as {path}."
-        room = max(BODY_MAX - len(head) - len(foot) - 40 * len(have) - 8, 60 * len(have))
+    def _body(job: Job, day: str, got: list[tuple[Site, str | None, str]], path: str) -> str:
+        have = [(s, t) for s, t, _ in got if t is not None]
+        head, foot = _header(job, day, len(have), len(got)), f"Saved in the workspace as {path}."
+        missing = "Not available: " + "; ".join(f"{s.label} ({w})" for s, t, w in got if t is None) if len(have) < len(got) else ""
+        room = max(BODY_MAX - len(head) - len(foot) - len(missing) - 40 * len(have) - 8, 60 * len(have))
         cap = max(room // len(have), 60)
         parts = [head]
         for site, text in have:
-            parts.append(f"{site.label}:\n{text if len(text) <= cap else text[:cap].rstrip() + ' ...'}")
+            text = text if len(text) <= cap else text[:cap].rstrip() + " ..."
+            parts.append(f"{site.label}:\n" + "\n".join(f"> {l}" for l in text.splitlines() if l.strip()))  # every page line is quoted
+        parts += [missing] if missing else []
         parts.append(foot)
         return "\n\n".join(parts)[:BODY_MAX]
