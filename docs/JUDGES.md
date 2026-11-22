@@ -26,7 +26,7 @@ make scoreboard
 
 Real result: eight pages, the same scripted attacker run twice. **Unprotected: 7/7 attacks got through. Protected: 7/7 contained** (four by freezing the agent at the tripwire, three stopped at the approval), and the clean page ran normally in both. What it shows: the mechanism. A canary read or sent out freezes the agent; an outside action needs an approval that the gateway wrote itself.
 
-## 4. The scripted story (needs a running gateway)
+## 4. The scripted story (needs a running gateway; it uses port 8000)
 
 ```
 AIRLOCK_STANDING=1 AIRLOCK_DEMO_MODE=mock make demo     # gateway on :8000 and dashboard on :5173
@@ -35,7 +35,7 @@ python3 gateway/scripts/run_demo.py --errands --standing --employee
 make demo-stop
 ```
 
-**Not re-run for this page.** Port 8000 was held by another gateway on the machine that wrote it, and these scripts talk to port 8000 and reset state, so they were left alone. The last recorded result is 27/27 for `make demo-run` (CLAUDE.md and docs/DEMO.md), plus 10 checks for `--standing` and 6 for `--employee`. Run them yourself and treat the numbers here as unconfirmed until you do. Open http://localhost:5173 to watch the timeline, the approval card and Rewind.
+Real results, mock mode, run on 2026-11-22 after the overnight branch: `make demo-run` **27/27 checks passed** (about 1 s), and the combined run `run_demo.py --errands --standing --employee` **51/51 checks passed** (about 3 s). `--standing` adds 10 checks and `--employee` adds 6. Open http://localhost:5173 to watch the timeline, the approval card and Rewind. Docker and the physical key are not part of this run and stay UNTESTED here.
 
 ## What is NOT proven by this path
 
