@@ -12,7 +12,7 @@ make sandbox-test    # 44 integration tests (stop `make server` first: some test
 make sandbox-down
 ```
 
-`make test` never needs Docker: with no stack running the 44 docker tests skip (today: 1073 passed, 54 skipped, the other 10 being live WebSocket tests that need `mitmdump`; the older table rows below keep the counts from when each was run).
+`make test` never needs Docker: with no stack running the 44 docker tests skip (today: 1244 passed, 54 skipped, the other 10 being live WebSocket tests that need `mitmdump`; the older table rows below keep the counts from when each was run).
 
 ## What was run and seen (first pass; counts are from when each row was run)
 
