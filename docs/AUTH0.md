@@ -60,7 +60,15 @@ export VITE_AUTH0_AUDIENCE=$AUTH0_AUDIENCE
 make demo            # or make server and make dashboard
 ```
 
-Check: `curl -s localhost:8000/state` shows `"auth_required": true`. Open the dashboard, sign in, run the attack task and use Deny, then Rewind. Without logging in, `curl -X POST localhost:8000/rewind -d '{}' -H 'Content-Type: application/json'` must return 401.
+Automated check (needs the gateway running with the same two variables; reads no secrets, prints PASS / FAIL / SKIP per line and a RESULT, exits non-zero on FAIL; SKIP when the variables are unset):
+
+```
+make auth0-check
+```
+
+It covers the tenant's JWKS, `auth_required`, and 401 with no or a garbage token. It does not log in, so it does not make this VERIFIED.
+
+Manual check: `curl -s localhost:8000/state` shows `"auth_required": true`. Open the dashboard, sign in, run the attack task and use Deny, then Rewind. Without logging in, `curl -X POST localhost:8000/rewind -d '{}' -H 'Content-Type: application/json'` must return 401.
 
 ## Turn it off
 

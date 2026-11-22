@@ -1,4 +1,4 @@
-.PHONY: preflight demo demo-stop demo-reset demo-run setup test server scoreboard dashboard attacker sandbox-up sandbox-down sandbox-test clean-clone key-ports docker-up docker-down employee-run
+.PHONY: preflight demo demo-stop demo-reset demo-run setup test server scoreboard dashboard attacker sandbox-up sandbox-down sandbox-test clean-clone key-ports docker-up docker-down employee-run auth0-check
 setup:
 	pip install --break-system-packages -r gateway/requirements-dev.txt
 	cd dashboard && npm install
@@ -6,6 +6,8 @@ test:
 	cd gateway && python3 -m pytest -q
 server:
 	cd gateway && python3 -m airlock.server
+auth0-check:
+	cd gateway && python3 scripts/auth0_check.py
 scoreboard:
 	cd gateway && python3 scripts/run_scoreboard.py
 dashboard:
