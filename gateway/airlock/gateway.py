@@ -22,6 +22,8 @@ from .tinyfish import WebTasks
 from .tools import parse_download, parse_web_task, summarize, validate_message
 from .tripwire import CanarySet
 
+MAX_DEPTH, MAX_NODES, SCAN_NODES = 64, 50_000, 2_000_000  # an action's details: no tool needs more (see _refuse_oversized)
+
 
 class Gateway:
     def __init__(self, settings: Settings, sandbox: Sandbox, policy: Policy, approvals: ApprovalManager,
@@ -87,6 +89,9 @@ class Gateway:
 
     # --- the pipeline ----------------------------------------------------------------------
     async def submit(self, action: Action) -> ActionResult:
+        refused = self._refuse_oversized(action)
+        if refused is not None:
+            return refused
         action.summary = summarize(action)  # never trust agent-written text
         self.emit("action_proposed", action.id, action=self._logged(action))
         if self.frozen:
@@ -136,6 +141,36 @@ class Gateway:
             return self._authorize(action, result.risk)
         return await self._execute(action, snapshot=result.risk >= Risk.REVERSIBLE and action.type != "web_task")  # a web task changes no workspace file
 
+    def _refuse_oversized(self, action: Action) -> ActionResult | None:
+        """A payload nested deeper than MAX_DEPTH or with more than MAX_NODES values is not an action any tool needs, and walking it
+        recursively (summary, canary scan, logging) could overflow the stack. It is looked at WITHOUT recursion first: a canary value
+        hidden inside is still a tripwire (freeze); anything else is refused with a plain error. Nothing from it is logged."""
+        strings, depth, nodes, stack = [], 0, 0, [(action.details, 1)]
+        while stack and nodes <= SCAN_NODES:     # looks further than it accepts: a canary hidden in a huge payload is still found
+            value, d = stack.pop()
+            nodes += 1
+            depth = max(depth, d)
+            if isinstance(value, str):
+                strings.append(value)
+            elif isinstance(value, dict):
+                stack += [(v, d + 1) for v in value.values()] + [(k, d + 1) for k in value]
+            elif isinstance(value, (list, tuple)):
+                stack += [(v, d + 1) for v in value]
+            elif value is not None:
+                strings.append(str(value)[:200])
+        if depth <= MAX_DEPTH and nodes <= MAX_NODES:
+            return None
+        action.details = {}                      # nothing from the oversized payload is kept, logged or shown
+        action.summary = "Action refused (payload too large or too deeply nested)"
+        if self.canaries.found_in(*strings):
+            reason = "canary value found in action"
+            self.freeze(reason)
+            self.emit("tripwire", action.id, reason=reason, risk=int(Risk.HARD_STOP), summary=action.summary)
+            return ActionResult(action_id=action.id, status="blocked", ok=False, reason=reason)
+        reason = f"the action is nested deeper than {MAX_DEPTH} levels or has more than {MAX_NODES} values"
+        self.emit("action_rejected", action.id, reason=reason, summary=action.summary, type=str(action.type)[:80])
+        return ActionResult(action_id=action.id, status="error", ok=False, reason=reason, output=f"rejected: {reason}")
+
     def _web_task_refusal(self, action: Action) -> ActionResult | None:
         """Everything that can be decided before a person is asked: is it on, is it valid, is there budget. A canary in the url or
         goal was already a HARD_STOP above. Returns the result to give back, or None to go on (the details are then the clean two fields)."""
@@ -178,7 +213,11 @@ class Gateway:
         if self.frozen:  # a freeze landed after the last check: nothing starts
             return self._cancelled(action, started=False)
         if snapshot:
-            sid = self.sandbox.snapshot(f"before {action.id}")
+            try:
+                sid = self.sandbox.snapshot(f"before {action.id}")
+            except Exception as exc:  # no recovery point means no write: fail closed, and say so instead of raising
+                self.emit("action_error", action.id, summary=action.summary, error=f"snapshot failed ({type(exc).__name__})")
+                return ActionResult(action_id=action.id, status="error", ok=False, reason=f"no snapshot could be taken ({type(exc).__name__}): the action did not run")
             self.emit("snapshot", action.id, snapshot_id=sid)
         # web_task runs from the host, not in the sandbox; both go through the same task, so a freeze cancels either one
         task = asyncio.ensure_future(self._run_web_task(action) if action.type == "web_task" and action.source == NATIVE
@@ -192,6 +231,9 @@ class Gateway:
             if action.id not in self._aborted:
                 raise  # the caller itself was cancelled (shutdown), not a freeze
             return self._cancelled(action, started=True)
+        except Exception as exc:  # a backend that crashes (Docker gone, a bug) is an error result, never an exception out of submit()
+            self.emit("action_error", action.id, summary=action.summary, error=type(exc).__name__)  # the class only: its text can echo agent data
+            return ActionResult(action_id=action.id, status="error", ok=False, reason=f"the sandbox failed ({type(exc).__name__})")
         finally:
             self._inflight.pop(action.id, None)
             self._aborted.discard(action.id)

@@ -22,12 +22,19 @@ class SnapshotStore:
         self.root.mkdir(parents=True, exist_ok=True)
 
     def _ids(self) -> list[str]:
-        return sorted(p.name for p in self.root.iterdir() if p.is_dir())
+        return sorted(p.name for p in self.root.iterdir() if p.is_dir() and _SID.fullmatch(p.name))  # a half-copied ".partial" folder is not a snapshot
 
     def snapshot(self, label: str = "") -> str:
         ids = self._ids()
         sid = f"s{(int(ids[-1][1:]) + 1) if ids else 1:04d}"
-        shutil.copytree(self.workspace, self.root / sid, symlinks=True)
+        partial = self.root / f".{sid}.partial"   # copied under another name and renamed when complete: a failure (a named pipe, a full disk) leaves no
+        shutil.rmtree(partial, ignore_errors=True)  # half snapshot that a later rewind would pick as the newest
+        try:
+            shutil.copytree(self.workspace, partial, symlinks=True)
+        except BaseException:
+            shutil.rmtree(partial, ignore_errors=True)
+            raise
+        partial.rename(self.root / sid)
         if label:
             (self.root / f"{sid}.label").write_text(label)
         return sid
